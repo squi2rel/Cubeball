@@ -27,7 +27,14 @@ public class CBCommandExecutor implements CommandExecutor {
                     if (args[0].equalsIgnoreCase("match") && player.hasPermission("cubeball.manage")) {
                         balls.remove(BALL_MATCH_ID);
                         match = new Match();
-                        match.scanSpawn(player);
+                        player.sendMessage("[Cubeball] " + ChatColor.GREEN + "New match created!");
+                    } else if (args[0].equalsIgnoreCase("scanpoint") && player.hasPermission("cubeball.manage")) {
+                        if (match != null) match.scanPoint(player);
+                    } else if (args[0].equalsIgnoreCase("scanplayer") && player.hasPermission("cubeball.manage")) {
+                        if (match != null) {
+                            match.scanPlayer();
+                            match.displayTeams(player);
+                        }
                     } else if (args[0].equalsIgnoreCase("start") && player.hasPermission("cubeball.manage")) {
                         if (match != null) {
                             match.start(player);
@@ -36,8 +43,9 @@ public class CBCommandExecutor implements CommandExecutor {
                         }
                     } else if (args[0].equalsIgnoreCase("stop") && player.hasPermission("cubeball.manage")) {
                         if (match != null) {
-                            balls.remove(BALL_MATCH_ID);
-                            match = null;
+                            Ball ball = balls.remove(BALL_MATCH_ID);
+                            if (ball != null && ball.getBall() != null) ball.getBall().remove();
+                            match.setMatchState(MatchState.READY);
                             player.sendMessage("[Cubeball] " + ChatColor.GREEN + "Match cancelled ! To create a new match do /cb match");
                         } else {
                             player.sendMessage("[Cubeball] " + ChatColor.RED + "No match to stop");
@@ -91,7 +99,6 @@ public class CBCommandExecutor implements CommandExecutor {
                                 Player playerToAdd = Bukkit.getPlayer(args[2]);
                                 if (match.addPlayerToTeam(playerToAdd, team)) {
                                     player.sendMessage("[Cubeball] " + ChatColor.GREEN + "Player added to " + args[1].toUpperCase() + " team !");
-                                    playerToAdd.sendMessage("[Cubeball] " + ChatColor.GREEN + "Your are in the " + args[1].toUpperCase() + " team !");
                                     match.displayTeams(player);
                                     player.sendMessage("use /cb start when you are ready");
                                 } else {

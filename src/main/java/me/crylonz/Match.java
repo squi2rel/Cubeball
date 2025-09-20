@@ -2,12 +2,12 @@ package me.crylonz;
 
 import org.bukkit.*;
 import org.bukkit.block.Block;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
+import org.bukkit.util.Vector;
 
-import java.util.ArrayList;
-import java.util.Objects;
-import java.util.Random;
+import java.util.*;
 
 import static me.crylonz.CubeBall.*;
 import static me.crylonz.MatchState.*;
@@ -27,9 +27,9 @@ public class Match {
     private final Random rand = new Random();
     private final ArrayList<Location> blueTeamGoalBlocks;
     private final ArrayList<Location> redTeamGoalBlocks;
-    private final ArrayList<Player> blueTeam;
-    private final ArrayList<Player> redTeam;
-    private final ArrayList<Player> spectatorTeam;
+    private final HashSet<Player> blueTeam;
+    private final HashSet<Player> redTeam;
+    private final HashSet<Player> spectatorTeam;
     private MatchState matchState;
     private Location ballSpawn;
     private String lastTouchPlayer;
@@ -39,9 +39,9 @@ public class Match {
     private int redScore;
 
     public Match() {
-        blueTeam = new ArrayList<>();
-        redTeam = new ArrayList<>();
-        spectatorTeam = new ArrayList<>();
+        blueTeam = new HashSet<>();
+        redTeam = new HashSet<>();
+        spectatorTeam = new HashSet<>();
         blueTeamGoalBlocks = new ArrayList<>();
         redTeamGoalBlocks = new ArrayList<>();
         blueScore = 0;
@@ -49,50 +49,73 @@ public class Match {
         matchState = CREATED;
     }
 
-    public void scanSpawn(Player p) {
+    public void scanPoint(Player p) {
 
-        ballSpawn = null;
-        blueTeamSpawns = new ArrayList<>();
-        redTeamSpawns = new ArrayList<>();
+//        ballSpawn = null;
+        if (blueTeamSpawns == null) blueTeamSpawns = new ArrayList<>();
+        if (redTeamSpawns == null) redTeamSpawns = new ArrayList<>();
+
+        boolean scanBlue = blueTeamSpawns.isEmpty();
+        boolean scanRed = redTeamSpawns.isEmpty();
 
         int radius = 75;
         final Block block = p.getLocation().getBlock();
         for (int x = -(radius); x <= radius; x++) {
             for (int y = -(radius); y <= radius; y++) {
                 for (int z = -(radius); z <= radius; z++) {
-                    if (block.getRelative(x, y, z).getType() == ballSpawnBlock) {
+                    if (ballSpawn == null && block.getRelative(x, y, z).getType() == ballSpawnBlock) {
                         ballSpawn = block.getRelative(x, y + 3, z).getLocation().add(.5, 0, .5);
                     }
-                    if (block.getRelative(x, y, z).getType() == blueTeamSpawnBlock) {
+                    if (scanBlue && block.getRelative(x, y, z).getType() == blueTeamSpawnBlock) {
                         blueTeamSpawns.add(block.getRelative(x, y + 2, z).getLocation());
                     }
-                    if (block.getRelative(x, y, z).getType() == redTeamSpawnBlock) {
+                    if (scanRed && block.getRelative(x, y, z).getType() == redTeamSpawnBlock) {
                         redTeamSpawns.add(block.getRelative(x, y + 2, z).getLocation());
                     }
-                    if (block.getRelative(x, y, z).getType() == blueTeamGoalBlock) {
+                    if (scanBlue && block.getRelative(x, y, z).getType() == blueTeamGoalBlock) {
                         blueTeamGoalBlocks.add(block.getRelative(x, y, z).getLocation());
                     }
-                    if (block.getRelative(x, y, z).getType() == redTeamGoalBlock) {
+                    if (scanRed && block.getRelative(x, y, z).getType() == redTeamGoalBlock) {
                         redTeamGoalBlocks.add(block.getRelative(x, y, z).getLocation());
                     }
                 }
             }
         }
 
-        if (ballSpawn != null && blueTeamSpawns.size() > 0 && redTeamSpawns.size() > 0 &&
-                blueTeamGoalBlocks.size() > 0 && redTeamGoalBlocks.size() > 0) {
+        if (ballSpawn != null && !blueTeamSpawns.isEmpty() && !redTeamSpawns.isEmpty() &&
+                !blueTeamGoalBlocks.isEmpty() && !redTeamGoalBlocks.isEmpty()) {
             p.sendMessage("--- MATCH READY ---");
             matchState = READY;
         } else {
             p.sendMessage("--- ERROR ---");
         }
         p.sendMessage("Ball Spawn : " + (ballSpawn != null ? ChatColor.GREEN + "OK" : ChatColor.RED + "KO"));
-        p.sendMessage("Blue Spawn : " + (blueTeamSpawns.size() != 0 ? ChatColor.GREEN + "OK" : ChatColor.RED + "KO") + " (" + blueTeamSpawns.size() + ")");
-        p.sendMessage("Red Spawn  : " + (redTeamSpawns.size() != 0 ? ChatColor.GREEN + "OK" : ChatColor.RED + "KO") + " (" + redTeamSpawns.size() + ")");
-        p.sendMessage("Blue Goal  : " + (blueTeamGoalBlocks.size() != 0 ? ChatColor.GREEN + "OK" : ChatColor.RED + "KO") + " (" + blueTeamGoalBlocks.size() + ")");
-        p.sendMessage("Red Goal   : " + (redTeamGoalBlocks.size() != 0 ? ChatColor.GREEN + "OK" : ChatColor.RED + "KO") + " (" + redTeamGoalBlocks.size() + ")");
+        p.sendMessage("Blue Spawn : " + (!blueTeamSpawns.isEmpty() ? ChatColor.GREEN + "OK" : ChatColor.RED + "KO") + " (" + blueTeamSpawns.size() + ")");
+        p.sendMessage("Red Spawn  : " + (!redTeamSpawns.isEmpty() ? ChatColor.GREEN + "OK" : ChatColor.RED + "KO") + " (" + redTeamSpawns.size() + ")");
+        p.sendMessage("Blue Goal  : " + (!blueTeamGoalBlocks.isEmpty() ? ChatColor.GREEN + "OK" : ChatColor.RED + "KO") + " (" + blueTeamGoalBlocks.size() + ")");
+        p.sendMessage("Red Goal   : " + (!redTeamGoalBlocks.isEmpty() ? ChatColor.GREEN + "OK" : ChatColor.RED + "KO") + " (" + redTeamGoalBlocks.size() + ")");
         p.sendMessage("------------------");
         p.sendMessage("Next step : Use /cb team to generate team");
+    }
+
+    public void scanNearPlayers(ArrayList<Location> spawns, Team team) {
+        for (Location spawn : spawns) {
+            if (spawn == null) continue;
+            World world = Objects.requireNonNull(spawn.getWorld());
+            for (Entity entity : world.getNearbyEntities(spawn, 1, 1, 1)) {
+                if (entity instanceof Player) {
+                    Player player = (Player) entity;
+                    if (player.getVehicle() == null) addPlayerToTeam(player, team);
+                }
+            }
+        }
+    }
+
+    public void scanPlayer() {
+        blueTeam.clear();
+        redTeam.clear();
+        scanNearPlayers(blueTeamSpawns, Team.BLUE);
+        scanNearPlayers(redTeamSpawns, Team.RED);
     }
 
     public void start(Player p) {
@@ -115,16 +138,53 @@ public class Match {
         }
     }
 
-    private void startDelayedRound() {
-        blueTeam.forEach(player -> {
-            int randomIndex = rand.nextInt(blueTeamSpawns.size());
-            player.teleport(blueTeamSpawns.get(randomIndex));
-        });
 
-        redTeam.forEach(player -> {
-            int randomIndex = rand.nextInt(redTeamSpawns.size());
-            player.teleport(redTeamSpawns.get(randomIndex));
-        });
+    public int[] randomIds(int size, int n) {
+        if (size <= 0 || n <= 0) return new int[0];
+
+        int[] result = new int[n];
+
+        int filled = 0;
+        while (filled < n) {
+            int segmentLen = Math.min(size, n - filled);
+            int[] pool = new int[size];
+            for (int i = 0; i < size; i++) pool[i] = i;
+            for (int i = 0; i < segmentLen; i++) {
+                int j = i + rand.nextInt(size - i);
+                int tmp = pool[i];
+                pool[i] = pool[j];
+                pool[j] = tmp;
+                result[filled++] = pool[i];
+            }
+        }
+        return result;
+    }
+
+    public void teleportTeam(HashSet<Player> team, ArrayList<Location> spawns) {
+        int[] ids = randomIds(spawns.size(), team.size());
+        int i = 0;
+        for (Player player : team) {
+            player.teleport(getFacingLocation(spawns.get(ids[i++]), ballSpawn));
+        }
+    }
+
+    public static Location getFacingLocation(Location from, Location to) {
+        Location loc = from.clone();
+        Vector direction = to.toVector().subtract(loc.toVector());
+        double dx = direction.getX();
+        double dy = direction.getY();
+        double dz = direction.getZ();
+        float yaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
+        float pitch = (float) Math.toDegrees(-Math.atan2(dy, Math.sqrt(dx * dx + dz * dz)));
+        loc.setYaw(yaw);
+        loc.setPitch(pitch);
+        return loc;
+    }
+
+
+    private void startDelayedRound() {
+        teleportTeam(blueTeam, blueTeamSpawns);
+        teleportTeam(redTeam, redTeamSpawns);
 
         getServer().getScheduler().scheduleSyncDelayedTask(plugin, () -> sendMessageToAllPlayer("3", "", 1), 20);
         getServer().getScheduler().scheduleSyncDelayedTask(plugin, () -> sendMessageToAllPlayer("2", "", 1), 40);
@@ -144,24 +204,19 @@ public class Match {
     public boolean addPlayerToTeam(Player p, Team team) {
         if (p != null) {
             if (team.equals(Team.BLUE)) {
-                if (!blueTeam.contains(p)) {
-                    blueTeam.add(p);
-                }
+                blueTeam.add(p);
                 redTeam.remove(p);
                 spectatorTeam.remove(p);
             } else if (team.equals(Team.RED)) {
-                if (!redTeam.contains(p)) {
-                    redTeam.add(p);
-                }
+                redTeam.add(p);
                 blueTeam.remove(p);
                 spectatorTeam.remove(p);
             } else {
-                if (!spectatorTeam.contains(p)) {
-                    spectatorTeam.add(p);
-                }
+                spectatorTeam.add(p);
                 blueTeam.remove(p);
                 redTeam.remove(p);
             }
+            p.sendMessage("[Cubeball] " + ChatColor.GREEN + "Your are in the " + team + " team !");
             return true;
         }
         return false;
@@ -222,10 +277,8 @@ public class Match {
 
         String score = ChatColor.BLUE.toString() + getBlueScore() + ChatColor.WHITE + " - " + ChatColor.RED + getRedScore();
         sendMessageToAllPlayer(title, score, 3);
-        if (!getMatchState().equals(OVERTIME)) {
-            matchState = END;
-            removeBall();
-        }
+        removeBall();
+        setMatchState(READY);
     }
 
     public void sendScoreToPlayer() {
@@ -271,12 +324,12 @@ public class Match {
     public void triggerGoalAnimation(Team team) {
         if (team.equals(Team.BLUE)) {
             redTeamGoalBlocks.forEach(block -> {
-                Objects.requireNonNull(block.getWorld()).spawnEntity(block.getBlock().getLocation(), EntityType.FIREWORK);
+                Objects.requireNonNull(block.getWorld()).spawnEntity(block.getBlock().getLocation(), EntityType.FIREWORK_ROCKET);
                 Objects.requireNonNull(block.getWorld()).playEffect(block.getBlock().getLocation(), Effect.VILLAGER_PLANT_GROW, 3);
             });
         } else {
             blueTeamGoalBlocks.forEach(block -> {
-                Objects.requireNonNull(block.getWorld()).spawnEntity(block.getBlock().getLocation(), EntityType.FIREWORK);
+                Objects.requireNonNull(block.getWorld()).spawnEntity(block.getBlock().getLocation(), EntityType.FIREWORK_ROCKET);
                 Objects.requireNonNull(block.getWorld()).playEffect(block.getBlock().getLocation(), Effect.VILLAGER_PLANT_GROW, 3);
             });
 
@@ -287,21 +340,21 @@ public class Match {
         p.sendMessage("BLUE TEAM : " + this.blueTeam.size() + " player(s)");
         this.blueTeam.forEach(player -> {
             if (player != null) {
-                p.sendMessage("-" + ChatColor.BLUE + player.getDisplayName());
+                p.sendMessage("- " + ChatColor.BLUE + player.getDisplayName());
             }
         });
 
         p.sendMessage("RED TEAM : " + this.redTeam.size() + " player(s)");
         this.redTeam.forEach(player -> {
             if (player != null) {
-                p.sendMessage("-" + ChatColor.RED + player.getDisplayName());
+                p.sendMessage("- " + ChatColor.RED + player.getDisplayName());
             }
         });
 
         p.sendMessage("SPECTATOR TEAM : " + this.spectatorTeam.size() + " player(s)");
         this.spectatorTeam.forEach(player -> {
             if (player != null) {
-                p.sendMessage("-" + ChatColor.GREEN + player.getDisplayName());
+                p.sendMessage("- " + ChatColor.GREEN + player.getDisplayName());
             }
         });
     }
@@ -310,15 +363,15 @@ public class Match {
         this.lastTouchPlayer = lastTouchPlayer;
     }
 
-    public ArrayList<Player> getBlueTeam() {
+    public HashSet<Player> getBlueTeam() {
         return blueTeam;
     }
 
-    public ArrayList<Player> getRedTeam() {
+    public HashSet<Player> getRedTeam() {
         return redTeam;
     }
 
-    public ArrayList<Player> getSpectatorTeam() {
+    public HashSet<Player> getSpectatorTeam() {
         return spectatorTeam;
     }
 
@@ -328,6 +381,11 @@ public class Match {
         team.addAll(getBlueTeam());
         team.addAll(getSpectatorTeam());
         return team;
+    }
+
+    public boolean containsPlayer(Player player) {
+        if (getRedTeam().contains(player)) return true;
+        return getBlueTeam().contains(player);
     }
 
     public int getBlueScore() {

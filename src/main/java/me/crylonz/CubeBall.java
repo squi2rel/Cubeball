@@ -1,11 +1,17 @@
 package me.crylonz;
 
+import jdk.javadoc.internal.doclets.formats.html.markup.Text;
+import net.md_5.bungee.api.ChatMessageType;
+import net.md_5.bungee.api.chat.TextComponent;
 import org.bstats.bukkit.Metrics;
 import org.bukkit.*;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.FallingBlock;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.PluginManager;
@@ -17,8 +23,7 @@ import java.util.*;
 import java.util.logging.Logger;
 
 import static java.lang.Math.abs;
-import static me.crylonz.MatchState.IN_PROGRESS;
-import static me.crylonz.MatchState.OVERTIME;
+import static me.crylonz.MatchState.*;
 
 public class CubeBall extends JavaPlugin {
 
@@ -32,6 +37,10 @@ public class CubeBall extends JavaPlugin {
     public static Plugin plugin;
     public static int matchTimer = 0;
     public final static Logger log = Logger.getLogger("Minecraft");
+
+
+    public static HashMap<Player, Long> cooldown;
+    public static long cooldownTime = 15000;
 
     // config
     public static Material cubeBallBlock = Material.IRON_BLOCK;
@@ -50,7 +59,7 @@ public class CubeBall extends JavaPlugin {
         block.setGlowing(true);
         block.setDropItem(false);
         block.setInvulnerable(true);
-        block.playEffect(EntityEffect.ENTITY_POOF);
+//        block.playEffect(EntityEffect.ENTITY_POOF);
 
         Ball ball = new Ball();
         ball.setId(id);
@@ -80,6 +89,8 @@ public class CubeBall extends JavaPlugin {
 
         Metrics metrics = new Metrics(this, 17634);
 
+        cooldown = new HashMap<>();
+
         launchRepeatingTask();
 
         Objects.requireNonNull(this.getCommand("cb"), "Command cb not found")
@@ -103,11 +114,27 @@ public class CubeBall extends JavaPlugin {
                 value.getBall().remove();
             }
         });
+        getServer().getScheduler().cancelTasks(this);
+    }
+
+    public static void launch(Player player, double power) {
+        Vector direction = player.getLocation().getDirection().normalize();
+        direction.setY(0.2);
+        Vector velocity = direction.multiply(power);
+        player.setVelocity(velocity);
     }
 
     private void launchRepeatingTask() {
 
         getServer().getScheduler().scheduleSyncRepeatingTask(this, () -> {
+
+            cooldown.entrySet().removeIf(entry -> {
+                long targetTime = entry.getValue() + cooldownTime;
+                boolean b = System.currentTimeMillis() > targetTime;
+                entry.getKey().spigot().sendMessage(ChatMessageType.ACTION_BAR, b ? new TextComponent("弹射技能已准备好!") : new TextComponent("弹射技能还剩 " + (int) ((targetTime - System.currentTimeMillis()) / 1000.0 + 1) + " 秒冷却"));
+                return b;
+            });
+
             if (match != null && match.getMatchState().equals(IN_PROGRESS)) {
                 matchTimer--;
 
@@ -129,9 +156,11 @@ public class CubeBall extends JavaPlugin {
                 if (matchTimer <= 0) {
                     match.endMatch();
                     if (match.getMatchState() != OVERTIME) {
-                        match = null;
+                        match.setMatchState(READY);
                     }
                 }
+            } else {
+                cooldown.clear();
             }
         }, 0, 20);
 
@@ -140,7 +169,6 @@ public class CubeBall extends JavaPlugin {
 
             for (Iterator<Map.Entry<String, Ball>> iterator = balls.entrySet().iterator(); iterator.hasNext(); ) {
                 Map.Entry<String, Ball> entry = iterator.next();
-                String id = entry.getKey();
                 Ball ballData = entry.getValue();
                 if (ballData.getBall() != null) {
                     ballData.getBall().setTicksLived(1);
@@ -164,18 +192,20 @@ public class CubeBall extends JavaPlugin {
                                                 Math.floor(ballData.getBall().getLocation().getZ()) == Math.floor(player.getLocation().getZ()))) {
 
                                     // compute velocity to the ball
-                                    double yVeclocity = 0.15;
+                                    double yVelocity = 0.15;
+                                    double xzMul = 1;
 
                                     if (player.isSneaking()) {
-                                        yVeclocity = 0.5;
+                                        yVelocity = 0.3;
+                                        xzMul = 3.5;
                                     } else if (player.isSprinting()) {
-                                        yVeclocity = 0.25;
+                                        yVelocity = 0.25;
                                     }
 
                                     Vector velocity = ballData.getBall().getVelocity();
-                                    velocity.setY(ballData.getBall().getVelocity().getY() + yVeclocity + player.getVelocity().getY() / 2);
-                                    velocity.setX(ballData.getBall().getVelocity().getX() + player.getLocation().getDirection().getX() / 2);
-                                    velocity.setZ(ballData.getBall().getVelocity().getZ() + player.getLocation().getDirection().getZ() / 2);
+                                    velocity.setY(ballData.getBall().getVelocity().getY() + yVelocity + player.getVelocity().getY() / 2);
+                                    velocity.setX(ballData.getBall().getVelocity().getX() + (player.getLocation().getDirection().getX() / 2) * xzMul);
+                                    velocity.setZ(ballData.getBall().getVelocity().getZ() + (player.getLocation().getDirection().getZ() / 2) * xzMul);
 
                                     // if player is not moving, create bouncing on it
                                     if (abs(player.getVelocity().getX() + player.getVelocity().getY() + player.getVelocity().getZ()) == 0) {

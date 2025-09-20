@@ -24,14 +24,20 @@ public class CBTabCompletion implements TabCompleter {
             if (cmd.getName().equalsIgnoreCase("cb") && player.hasPermission("cubeball.manage")) {
 
                 if (args.length == 1) {
-                    list.add("generate");
-                    list.add("remove");
-                    list.add("match");
-                    list.add("start");
-                    list.add("stop");
-                    list.add("team");
-                    list.add("pause");
-                    list.add("resume");
+                    ArrayList<String> commands = new ArrayList<>();
+                    commands.add("generate");
+                    commands.add("remove");
+                    commands.add("match");
+                    commands.add("scanpoint");
+                    commands.add("scanplayer");
+                    commands.add("start");
+                    commands.add("stop");
+                    commands.add("team");
+                    commands.add("pause");
+                    commands.add("resume");
+                    for (String command : commands) {
+                        if (command.startsWith(args[0].toLowerCase())) list.add(command);
+                    }
                 }
                 if (args.length == 2) {
                     if (args[0].equalsIgnoreCase("team")) {
@@ -47,12 +53,10 @@ public class CBTabCompletion implements TabCompleter {
                     }
                 }
                 if (args.length == 3) {
-
-                }
-                if (args.length == 3) {
                     if (args[1].equalsIgnoreCase("BLUE") || args[1].equalsIgnoreCase("RED")) {
+                        String lower = args[2].toLowerCase();
                         Bukkit.getOnlinePlayers().forEach(onlinePlayer -> {
-                            list.add(onlinePlayer.getDisplayName());
+                            if (onlinePlayer.getDisplayName().toLowerCase().startsWith(lower)) list.add(onlinePlayer.getDisplayName());
                         });
                     }
                     if (args[0].equalsIgnoreCase("generate")) {

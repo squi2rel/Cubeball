@@ -6,6 +6,8 @@ import org.bukkit.entity.EntityType;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.util.Vector;
 
 import java.util.concurrent.atomic.AtomicReference;
@@ -55,6 +57,22 @@ public class CubeBallListener implements Listener {
 
             }
         }
+    }
+
+    @EventHandler
+    public static void onSwapItem(PlayerSwapHandItemsEvent event) {
+        if (match != null && match.getMatchState() == MatchState.IN_PROGRESS && match.containsPlayer(event.getPlayer())) {
+            if (!cooldown.containsKey(event.getPlayer())) {
+                cooldown.put(event.getPlayer(), System.currentTimeMillis());
+                launch(event.getPlayer(), 2);
+                event.setCancelled(true);
+            }
+        }
+    }
+
+    @EventHandler
+    public static void onPlayerLeave(PlayerQuitEvent event) {
+        cooldown.remove(event.getPlayer());
     }
 
     private Ball fetchBallContacting(Location location) {
