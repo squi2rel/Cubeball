@@ -5,6 +5,9 @@ import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
+import org.bukkit.scheduler.BukkitScheduler;
 import org.bukkit.util.Vector;
 
 import java.util.*;
@@ -12,10 +15,6 @@ import java.util.*;
 import static me.crylonz.CubeBall.*;
 import static me.crylonz.MatchState.*;
 import static org.bukkit.Bukkit.getServer;
-
-enum Team {RED, BLUE, SPECTATOR}
-
-enum MatchState {CREATED, READY, IN_PROGRESS, GOAL, PAUSED, OVERTIME, END}
 
 public class Match {
 
@@ -30,9 +29,10 @@ public class Match {
     private final HashSet<Player> blueTeam;
     private final HashSet<Player> redTeam;
     private final HashSet<Player> spectatorTeam;
+    private final HashMap<Player, Integer> goals;
     private MatchState matchState;
     private Location ballSpawn;
-    private String lastTouchPlayer;
+    private Player lastTouchPlayer;
     private ArrayList<Location> blueTeamSpawns;
     private ArrayList<Location> redTeamSpawns;
     private int blueScore;
@@ -44,6 +44,7 @@ public class Match {
         spectatorTeam = new HashSet<>();
         blueTeamGoalBlocks = new ArrayList<>();
         redTeamGoalBlocks = new ArrayList<>();
+        goals = new HashMap<>();
         blueScore = 0;
         redScore = 0;
         matchState = CREATED;
@@ -67,10 +68,10 @@ public class Match {
                         ballSpawn = block.getRelative(x, y + 3, z).getLocation().add(.5, 0, .5);
                     }
                     if (scanBlue && block.getRelative(x, y, z).getType() == blueTeamSpawnBlock) {
-                        blueTeamSpawns.add(block.getRelative(x, y + 2, z).getLocation());
+                        blueTeamSpawns.add(block.getRelative(x, y + 1, z).getLocation().add(.5, 0, .5));
                     }
                     if (scanRed && block.getRelative(x, y, z).getType() == redTeamSpawnBlock) {
-                        redTeamSpawns.add(block.getRelative(x, y + 2, z).getLocation());
+                        redTeamSpawns.add(block.getRelative(x, y + 1, z).getLocation().add(.5, 0, .5));
                     }
                     if (scanBlue && block.getRelative(x, y, z).getType() == blueTeamGoalBlock) {
                         blueTeamGoalBlocks.add(block.getRelative(x, y, z).getLocation());
@@ -116,17 +117,28 @@ public class Match {
         redTeam.clear();
         scanNearPlayers(blueTeamSpawns, Team.BLUE);
         scanNearPlayers(redTeamSpawns, Team.RED);
+        World world = ballSpawn.getWorld();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (player.getWorld() != world) continue;
+            if (player.getLocation().distance(ballSpawn) < 256) {
+                if (!blueTeam.contains(player) && !redTeam.contains(player)) addPlayerToTeam(player, Team.SPECTATOR);
+            }
+        }
     }
 
     public void start(Player p) {
         if (matchState.equals(READY)) {
             if (!blueTeam.isEmpty() || !redTeam.isEmpty()) {
+                Comparator<Location> sort = Comparator.comparingDouble(l -> l.distance(ballSpawn));
+                blueTeamSpawns.sort(sort);
+                redTeamSpawns.sort(sort);
+
                 startDelayedRound();
                 matchTimer = matchDuration;
                 matchState = IN_PROGRESS;
 
                 p.sendMessage("[CubeBall] " + ChatColor.GREEN + "Match starting !");
-                getAllPlayer().forEach(player -> {
+                getAllPlayer(true).forEach(player -> {
                     player.sendMessage("[CubeBall] " + ChatColor.GREEN + "Match started ! Duration : " + ChatColor.GOLD + (matchTimer / 60) + ":" + (matchTimer - ((matchTimer / 60) * 60)));
                     player.sendMessage("[CubeBall] " + ChatColor.GREEN + "Max goals : " + (maxGoal == 0 ? "UNLIMITED" : maxGoal));
                 });
@@ -143,14 +155,18 @@ public class Match {
         if (size <= 0 || n <= 0) return new int[0];
 
         int[] result = new int[n];
-
         int filled = 0;
+
         while (filled < n) {
             int segmentLen = Math.min(size, n - filled);
-            int[] pool = new int[size];
-            for (int i = 0; i < size; i++) pool[i] = i;
+
+            int[] pool = new int[segmentLen];
             for (int i = 0; i < segmentLen; i++) {
-                int j = i + rand.nextInt(size - i);
+                pool[i] = i;
+            }
+
+            for (int i = 0; i < segmentLen; i++) {
+                int j = i + rand.nextInt(segmentLen - i);
                 int tmp = pool[i];
                 pool[i] = pool[j];
                 pool[j] = tmp;
@@ -181,16 +197,23 @@ public class Match {
         return loc;
     }
 
-
     private void startDelayedRound() {
         teleportTeam(blueTeam, blueTeamSpawns);
         teleportTeam(redTeam, redTeamSpawns);
 
-        getServer().getScheduler().scheduleSyncDelayedTask(plugin, () -> sendMessageToAllPlayer("3", "", 1), 20);
-        getServer().getScheduler().scheduleSyncDelayedTask(plugin, () -> sendMessageToAllPlayer("2", "", 1), 40);
-        getServer().getScheduler().scheduleSyncDelayedTask(plugin, () -> sendMessageToAllPlayer("1", "", 1), 60);
-        getServer().getScheduler().scheduleSyncDelayedTask(plugin, () -> {
-            sendMessageToAllPlayer("GO !", "", 1);
+        PotionEffect effect = new PotionEffect(PotionEffectType.SLOWNESS, 80, 255);
+        getAllPlayer(false).forEach(player -> {
+            player.setVelocity(new Vector(0, 0, 0));
+            player.addPotionEffect(effect);
+            surroundWith(player, Material.BARRIER);
+        });
+        BukkitScheduler scheduler = getServer().getScheduler();
+        scheduler.scheduleSyncDelayedTask(plugin, () -> sendMessageToAllPlayer("3", "", 1, Sound.BLOCK_NOTE_BLOCK_BELL, 1), 20);
+        scheduler.scheduleSyncDelayedTask(plugin, () -> sendMessageToAllPlayer("2", "", 1, Sound.BLOCK_NOTE_BLOCK_BELL, 1), 40);
+        scheduler.scheduleSyncDelayedTask(plugin, () -> sendMessageToAllPlayer("1", "", 1, Sound.BLOCK_NOTE_BLOCK_BELL, 1), 60);
+        scheduler.scheduleSyncDelayedTask(plugin, () -> {
+            sendMessageToAllPlayer("GO !", "", 1, Sound.BLOCK_NOTE_BLOCK_BELL, 2);
+            getAllPlayer(false).forEach(player -> surroundWith(player, Material.AIR));
             startRound();
         }, 80);
     }
@@ -199,6 +222,16 @@ public class Match {
         matchState = matchTimer > 0 ? IN_PROGRESS : OVERTIME;
         removeBall();
         CubeBall.generateBall(BALL_MATCH_ID, ballSpawn, null);
+    }
+
+    public static void surroundWith(Player player, Material block) {
+        Block pos = player.getLocation().getBlock();
+        int[][] offsets = {{1, 0}, {0, 1}, {-1, 0}, {0, -1}};
+        for (int[] offset : offsets) {
+            pos.getRelative(offset[0], 0, offset[1]).setType(block);
+            pos.getRelative(offset[0], 1, offset[1]).setType(block);
+        }
+        pos.getRelative(0, 2, 0).setType(block);
     }
 
     public boolean addPlayerToTeam(Player p, Team team) {
@@ -225,17 +258,19 @@ public class Match {
     public void checkGoal(Location ballLocation) {
         if (matchState.equals(IN_PROGRESS) || matchState.equals(OVERTIME)) {
 
+            int ballX = ballLocation.getBlockX();
+            int ballZ = ballLocation.getBlockZ();
             for (Location blockLocation : blueTeamGoalBlocks) {
-                if (ballLocation.getBlockX() == blockLocation.getBlockX() &&
-                        ballLocation.getBlockZ() == blockLocation.getBlockZ()) {
+                if (ballX == blockLocation.getBlockX() &&
+                        ballZ == blockLocation.getBlockZ()) {
                     goal(Team.RED);
                     return;
                 }
             }
 
             for (Location blockLocation : redTeamGoalBlocks) {
-                if (ballLocation.getBlockX() == blockLocation.getBlockX() &&
-                        ballLocation.getBlockZ() == blockLocation.getBlockZ()) {
+                if (ballX == blockLocation.getBlockX() &&
+                        ballZ == blockLocation.getBlockZ()) {
                     goal(Team.BLUE);
                     return;
                 }
@@ -256,7 +291,7 @@ public class Match {
         if (matchState.equals(IN_PROGRESS) && (maxGoal == 0 || (blueScore != maxGoal && redScore != maxGoal))) {
             sendScoreToPlayer();
             matchState = GOAL;
-            getServer().getScheduler().scheduleSyncDelayedTask(plugin, this::startDelayedRound, 30 * 2);
+            getServer().getScheduler().scheduleSyncDelayedTask(plugin, this::startDelayedRound, 20 * 3);
         } else {
             matchState = GOAL;
             endMatch();
@@ -264,28 +299,70 @@ public class Match {
         destroyBall(BALL_MATCH_ID);
     }
 
+    public void spawnFirework(Team team) {
+        BukkitScheduler scheduler = getServer().getScheduler();
+        for (int i = 0; i < 3; i++) {
+            int offset = i * 30;
+            scheduler.runTaskLater(plugin, () -> spawnFireworkFor(team), offset + 5);
+            scheduler.runTaskLater(plugin, () -> spawnFireworkFor(team), offset + 10);
+            scheduler.runTaskLater(plugin, () -> spawnFireworkFor(team), offset + 15);
+        }
+    }
+
+    public void spawnFireworkFor(Team team) {
+        HashSet<Player> players = team == Team.BLUE ? blueTeam : redTeam;
+        for (Player player : players) {
+            player.getWorld().spawnEntity(player.getLocation(), EntityType.FIREWORK_ROCKET);
+        }
+    }
+
     public void endMatch() {
         String title;
         if (getBlueScore() > getRedScore()) {
             title = ChatColor.BLUE + "BLUE" + ChatColor.GOLD + " TEAM WIN !";
+            spawnFirework(Team.BLUE);
         } else if (getBlueScore() < getRedScore()) {
             title = ChatColor.RED + "RED" + ChatColor.GOLD + " TEAM WIN !";
+            spawnFirework(Team.RED);
         } else {
             title = ChatColor.GOLD + "OVERTIME !";
             setMatchState(OVERTIME);
         }
 
         String score = ChatColor.BLUE.toString() + getBlueScore() + ChatColor.WHITE + " - " + ChatColor.RED + getRedScore();
-        sendMessageToAllPlayer(title, score, 3);
+        sendMessageToAllPlayer(title, score, 3, Sound.ENTITY_RABBIT_DEATH, 0.5f);
+
+        ArrayList<Map.Entry<Player, Integer>> list = new ArrayList<>(goals.entrySet());
+        list.sort((e1, e2) -> Integer.compare(e2.getValue(), e1.getValue()));
+        getAllPlayer(true).forEach(player -> {
+            if (player != null) {
+                player.sendMessage("[CubeBall] " + ChatColor.GREEN + "GAME OVER!");
+                player.sendMessage("[CubeBall] 进球排行:");
+                player.sendMessage("一共进了 " + ChatColor.GREEN + (redScore + blueScore) + ChatColor.WHITE + " 个球");
+                int i = 0;
+                for (Map.Entry<Player, Integer> entry : list) {
+                    player.sendMessage(++i + " - " + (blueTeam.contains(entry.getKey()) ? ChatColor.BLUE : ChatColor.RED) + entry.getKey().getDisplayName() + ChatColor.WHITE + ": " + entry.getValue());
+                }
+            }
+        });
+
         removeBall();
+        reset();
+    }
+
+    public void reset() {
         setMatchState(READY);
+        blueScore = 0;
+        redScore = 0;
+        goals.clear();
     }
 
     public void sendScoreToPlayer() {
         String title = ChatColor.BLUE.toString() + blueScore + ChatColor.WHITE + " - " + ChatColor.RED + redScore;
-        String subtitle = ChatColor.BOLD.toString() + ChatColor.GOLD + lastTouchPlayer.toUpperCase() + ChatColor.RESET + " GOALS ! "
+        String subtitle = ChatColor.BOLD.toString() + ChatColor.GOLD + lastTouchPlayer.getDisplayName().toUpperCase() + ChatColor.RESET + " GOALS ! "
                 + "(" + computeSpeedGoal() + " km/h)";
-        sendMessageToAllPlayer(title, subtitle, 3);
+        goals.put(lastTouchPlayer, goals.getOrDefault(lastTouchPlayer, 0) + 1);
+        sendMessageToAllPlayer(title, subtitle, 3, Sound.WEATHER_RAIN, 0.5f);
     }
 
     public double computeSpeedGoal() {
@@ -298,25 +375,17 @@ public class Match {
         return 0;
     }
 
-    public void sendMessageToAllPlayer(String title, String subtitle, int duration) {
-        blueTeam.forEach(player -> {
-            if (player != null) {
-                player.sendTitle(title, subtitle, 1, duration * 20, 1);
-                player.playSound(player.getLocation(), Sound.BLOCK_BEACON_ACTIVATE, 1, 3);
-            }
-        });
+    public void sendMessageToAllPlayer(String title, String subtitle, int duration, Sound sound, float pitch) {
+        send(blueTeam, title, subtitle, duration, sound, pitch);
+        send(redTeam, title, subtitle, duration, sound, pitch);
+        send(spectatorTeam, title, subtitle, duration, sound, pitch);
+    }
 
-        redTeam.forEach(player -> {
+    private void send(HashSet<Player> team, String title, String subtitle, int duration, Sound sound, float pitch) {
+        team.forEach(player -> {
             if (player != null) {
                 player.sendTitle(title, subtitle, 1, duration * 20, 1);
-                player.playSound(player.getLocation(), Sound.BLOCK_BEACON_ACTIVATE, 1, 3);
-            }
-        });
-
-        spectatorTeam.forEach(player -> {
-            if (player != null) {
-                player.sendTitle(title, subtitle, 1, duration * 20, 1);
-                player.playSound(player.getLocation(), Sound.BLOCK_BEACON_ACTIVATE, 1, 3);
+                player.playSound(player.getLocation(), sound, 1, pitch);
             }
         });
     }
@@ -359,7 +428,7 @@ public class Match {
         });
     }
 
-    public void setLastTouchPlayer(String lastTouchPlayer) {
+    public void setLastTouchPlayer(Player lastTouchPlayer) {
         this.lastTouchPlayer = lastTouchPlayer;
     }
 
@@ -375,11 +444,11 @@ public class Match {
         return spectatorTeam;
     }
 
-    public ArrayList<Player> getAllPlayer() {
+    public ArrayList<Player> getAllPlayer(boolean spectator) {
         ArrayList<Player> team = new ArrayList<>();
         team.addAll(getRedTeam());
         team.addAll(getBlueTeam());
-        team.addAll(getSpectatorTeam());
+        if (spectator) team.addAll(getSpectatorTeam());
         return team;
     }
 

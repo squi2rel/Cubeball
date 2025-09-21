@@ -45,14 +45,14 @@ public class CBCommandExecutor implements CommandExecutor {
                         if (match != null) {
                             Ball ball = balls.remove(BALL_MATCH_ID);
                             if (ball != null && ball.getBall() != null) ball.getBall().remove();
-                            match.setMatchState(MatchState.READY);
+                            match.reset();
                             player.sendMessage("[Cubeball] " + ChatColor.GREEN + "Match cancelled ! To create a new match do /cb match");
                         } else {
                             player.sendMessage("[Cubeball] " + ChatColor.RED + "No match to stop");
                         }
                     } else if (args[0].equalsIgnoreCase("pause") && player.hasPermission("cubeball.manage")) {
                         if (match != null && match.pause()) {
-                            for (Player p : match.getAllPlayer()) {
+                            for (Player p : match.getAllPlayer(true)) {
                                 if (p != null) {
                                     p.sendMessage("[Cubeball] " + ChatColor.RED + "Match PAUSED by " + ChatColor.GOLD + player.getName());
                                 }
@@ -62,7 +62,7 @@ public class CBCommandExecutor implements CommandExecutor {
                         }
                     } else if (args[0].equalsIgnoreCase("resume") && player.hasPermission("cubeball.manage")) {
                         if (match != null && match.resume()) {
-                            for (Player p : match.getAllPlayer()) {
+                            for (Player p : match.getAllPlayer(true)) {
                                 if (p != null) {
                                     p.sendMessage("[Cubeball] " + ChatColor.RED + "Match RESUMED by " + ChatColor.GOLD + player.getName());
                                 }

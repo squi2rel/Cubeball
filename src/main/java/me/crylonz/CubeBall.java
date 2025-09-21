@@ -1,6 +1,5 @@
 package me.crylonz;
 
-import jdk.javadoc.internal.doclets.formats.html.markup.Text;
 import net.md_5.bungee.api.ChatMessageType;
 import net.md_5.bungee.api.chat.TextComponent;
 import org.bstats.bukkit.Metrics;
@@ -9,9 +8,6 @@ import org.bukkit.block.data.BlockData;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.FallingBlock;
 import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.PluginManager;
@@ -59,7 +55,6 @@ public class CubeBall extends JavaPlugin {
         block.setGlowing(true);
         block.setDropItem(false);
         block.setInvulnerable(true);
-//        block.playEffect(EntityEffect.ENTITY_POOF);
 
         Ball ball = new Ball();
         ball.setId(id);
@@ -87,7 +82,7 @@ public class CubeBall extends JavaPlugin {
 
         plugin = this;
 
-        Metrics metrics = new Metrics(this, 17634);
+        new Metrics(this, 17634);
 
         cooldown = new HashMap<>();
 
@@ -131,7 +126,7 @@ public class CubeBall extends JavaPlugin {
             cooldown.entrySet().removeIf(entry -> {
                 long targetTime = entry.getValue() + cooldownTime;
                 boolean b = System.currentTimeMillis() > targetTime;
-                entry.getKey().spigot().sendMessage(ChatMessageType.ACTION_BAR, b ? new TextComponent("弹射技能已准备好!") : new TextComponent("弹射技能还剩 " + (int) ((targetTime - System.currentTimeMillis()) / 1000.0 + 1) + " 秒冷却"));
+                entry.getKey().spigot().sendMessage(ChatMessageType.ACTION_BAR, b ? new TextComponent("冲刺技能已准备好!") : new TextComponent("冲刺冷却: " + (int) ((targetTime - System.currentTimeMillis()) / 1000.0 + 1) + " 秒"));
                 return b;
             });
 
@@ -139,7 +134,7 @@ public class CubeBall extends JavaPlugin {
                 matchTimer--;
 
                 if (matchTimer % 60 == 0 && matchTimer > 0) {
-                    match.getAllPlayer().forEach(player -> {
+                    match.getAllPlayer(true).forEach(player -> {
                         if (player != null) {
                             player.sendMessage("[CubeBall] " + ChatColor.GOLD + matchTimer / 60 + " min left !");
                         }
@@ -147,7 +142,7 @@ public class CubeBall extends JavaPlugin {
                     });
                 }
                 if (matchTimer == 30 || matchTimer == 15 || matchTimer <= 10 && matchTimer > 0) {
-                    match.getAllPlayer().forEach(player -> {
+                    match.getAllPlayer(true).forEach(player -> {
                         if (player != null) {
                             player.sendMessage("[CubeBall] " + ChatColor.GOLD + matchTimer + " sec left !");
                         }
@@ -167,19 +162,10 @@ public class CubeBall extends JavaPlugin {
 
         getServer().getScheduler().scheduleSyncRepeatingTask(this, () -> {
 
-            for (Iterator<Map.Entry<String, Ball>> iterator = balls.entrySet().iterator(); iterator.hasNext(); ) {
-                Map.Entry<String, Ball> entry = iterator.next();
+            for (Map.Entry<String, Ball> entry : balls.entrySet()) {
                 Ball ballData = entry.getValue();
                 if (ballData.getBall() != null) {
                     ballData.getBall().setTicksLived(1);
-
-                    ArrayList<Player> players = new ArrayList<>();
-                    if (match != null) {
-                        players.addAll(match.getBlueTeam());
-                        players.addAll(match.getRedTeam());
-                    } else {
-                        players.addAll(Bukkit.getOnlinePlayers());
-                    }
 
                     ballData.getBall().getNearbyEntities(10, 10, 10)
                             .stream().filter(entity -> entity instanceof Player)
@@ -187,41 +173,21 @@ public class CubeBall extends JavaPlugin {
                                 Player player = (Player) p;
                                 // if player is colliding the ball
                                 if (player.getLocation().distance(ballData.getBall().getLocation()) < 1 || (
-                                        player.getLocation().distance(ballData.getBall().getLocation()) < 2 &&
+                                        player.getLocation().distance(ballData.getBall().getLocation()) < 2.5 &&
                                                 Math.floor(ballData.getBall().getLocation().getX()) == Math.floor(player.getLocation().getX()) &&
                                                 Math.floor(ballData.getBall().getLocation().getZ()) == Math.floor(player.getLocation().getZ()))) {
 
                                     // compute velocity to the ball
-                                    double yVelocity = 0.15;
-                                    double xzMul = 1;
-
-                                    if (player.isSneaking()) {
-                                        yVelocity = 0.3;
-                                        xzMul = 3.5;
-                                    } else if (player.isSprinting()) {
-                                        yVelocity = 0.25;
-                                    }
-
-                                    Vector velocity = ballData.getBall().getVelocity();
-                                    velocity.setY(ballData.getBall().getVelocity().getY() + yVelocity + player.getVelocity().getY() / 2);
-                                    velocity.setX(ballData.getBall().getVelocity().getX() + (player.getLocation().getDirection().getX() / 2) * xzMul);
-                                    velocity.setZ(ballData.getBall().getVelocity().getZ() + (player.getLocation().getDirection().getZ() / 2) * xzMul);
-
-                                    // if player is not moving, create bouncing on it
-                                    if (abs(player.getVelocity().getX() + player.getVelocity().getY() + player.getVelocity().getZ()) == 0) {
-                                        velocity.setY(0);
-                                        velocity.setX(0);
-                                        velocity.setZ(0);
-                                    }
+                                    Vector velocity = getVector(player, ballData);
 
                                     // apply ball trajectory
                                     ballData.getBall().setVelocity(velocity);
                                     ballData.getBall().setGravity(true);
-                                    ballData.getBall().getWorld().playSound(ballData.getBall().getLocation(), Sound.BLOCK_WOOL_HIT, 10, 1);
+                                    ballData.getBall().getWorld().playSound(ballData.getBall().getLocation(), Sound.BLOCK_STONE_HIT, 10, 1);
                                     ballData.setPlayerCollisionTick(0);
 
                                     if (match != null) {
-                                        match.setLastTouchPlayer(player.getDisplayName());
+                                        match.setLastTouchPlayer(player);
                                     }
                                 }
                             });
@@ -259,6 +225,31 @@ public class CubeBall extends JavaPlugin {
                 }
             }
         }, 0, 2);
+    }
+
+    private static Vector getVector(Player player, Ball ballData) {
+        double yVelocity = 0.15;
+        double xzMul = 1;
+
+        if (player.isSneaking()) {
+            yVelocity = 0.3;
+            xzMul = 3.5;
+        } else if (player.isSprinting()) {
+            yVelocity = 0.25;
+        }
+
+        Vector velocity = ballData.getBall().getVelocity();
+        velocity.setY(ballData.getBall().getVelocity().getY() + yVelocity + player.getVelocity().getY() / 2);
+        velocity.setX(ballData.getBall().getVelocity().getX() + (player.getLocation().getDirection().getX() / 2) * xzMul);
+        velocity.setZ(ballData.getBall().getVelocity().getZ() + (player.getLocation().getDirection().getZ() / 2) * xzMul);
+
+        // if player is not moving, create bouncing on it
+        if (abs(player.getVelocity().getX() + player.getVelocity().getY() + player.getVelocity().getZ()) == 0) {
+            velocity.setY(0);
+            velocity.setX(0);
+            velocity.setZ(0);
+        }
+        return velocity;
     }
 }
 
