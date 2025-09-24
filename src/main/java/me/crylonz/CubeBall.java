@@ -78,6 +78,18 @@ public class CubeBall extends JavaPlugin {
 
     public void onEnable() {
         PluginManager pm = getServer().getPluginManager();
+        String lang = getConfig().getString("language", "en");
+        I18n.init(this, lang);
+
+        configFile = new File(getDataFolder(), "config.yml");
+        if (!configFile.exists()) {
+            saveDefaultConfig();
+        } else {
+            cubeBallBlock = Material.valueOf((String) getConfig().get("cubeBallBlock"));
+            matchDuration = getConfig().getInt("matchDuration");
+            maxGoal = getConfig().getInt("maxGoal");
+        }
+
         pm.registerEvents(new CubeBallListener(), this);
 
         plugin = this;
@@ -92,15 +104,6 @@ public class CubeBall extends JavaPlugin {
                 .setExecutor(new CBCommandExecutor());
 
         Objects.requireNonNull(getCommand("cb")).setTabCompleter(new CBTabCompletion());
-
-        configFile = new File(getDataFolder(), "config.yml");
-        if (!configFile.exists()) {
-            saveDefaultConfig();
-        } else {
-            cubeBallBlock = Material.valueOf((String) getConfig().get("cubeBallBlock"));
-            matchDuration = getConfig().getInt("matchDuration");
-            maxGoal = getConfig().getInt("maxGoal");
-        }
     }
 
     public void onDisable() {
@@ -126,7 +129,7 @@ public class CubeBall extends JavaPlugin {
             cooldown.entrySet().removeIf(entry -> {
                 long targetTime = entry.getValue() + cooldownTime;
                 boolean b = System.currentTimeMillis() > targetTime;
-                entry.getKey().spigot().sendMessage(ChatMessageType.ACTION_BAR, b ? new TextComponent("冲刺技能已准备好!") : new TextComponent("冲刺冷却: " + (int) ((targetTime - System.currentTimeMillis()) / 1000.0 + 1) + " 秒"));
+                entry.getKey().spigot().sendMessage(ChatMessageType.ACTION_BAR, getDashCooldownText(b, targetTime));
                 return b;
             });
 
@@ -136,15 +139,14 @@ public class CubeBall extends JavaPlugin {
                 if (matchTimer % 60 == 0 && matchTimer > 0) {
                     match.getAllPlayer(true).forEach(player -> {
                         if (player != null) {
-                            player.sendMessage("[CubeBall] " + ChatColor.GOLD + matchTimer / 60 + " min left !");
+                            player.sendMessage(I18n.format("match_time_left_min", "min", matchTimer / 60));
                         }
-
                     });
                 }
                 if (matchTimer == 30 || matchTimer == 15 || matchTimer <= 10 && matchTimer > 0) {
                     match.getAllPlayer(true).forEach(player -> {
                         if (player != null) {
-                            player.sendMessage("[CubeBall] " + ChatColor.GOLD + matchTimer + " sec left !");
+                            player.sendMessage(I18n.format("match_time_left_sec", "sec", matchTimer));
                         }
                     });
                 }
@@ -225,6 +227,11 @@ public class CubeBall extends JavaPlugin {
                 }
             }
         }, 0, 2);
+    }
+
+    private static TextComponent getDashCooldownText(boolean b, long targetTime) {
+        if (b) return new TextComponent(I18n.get("dash_ready"));
+        return new TextComponent(I18n.format("dash_cooldown", "time", (int) ((targetTime - System.currentTimeMillis()) / 1000.0 + 1)));
     }
 
     private static Vector getVector(Player player, Ball ballData) {

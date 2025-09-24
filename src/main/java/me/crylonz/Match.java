@@ -85,18 +85,18 @@ public class Match {
 
         if (ballSpawn != null && !blueTeamSpawns.isEmpty() && !redTeamSpawns.isEmpty() &&
                 !blueTeamGoalBlocks.isEmpty() && !redTeamGoalBlocks.isEmpty()) {
-            p.sendMessage("--- MATCH READY ---");
+            p.sendMessage(I18n.get("match_ready"));
             matchState = READY;
         } else {
-            p.sendMessage("--- ERROR ---");
+            p.sendMessage(I18n.get("error"));
         }
-        p.sendMessage("Ball Spawn : " + (ballSpawn != null ? ChatColor.GREEN + "OK" : ChatColor.RED + "KO"));
-        p.sendMessage("Blue Spawn : " + (!blueTeamSpawns.isEmpty() ? ChatColor.GREEN + "OK" : ChatColor.RED + "KO") + " (" + blueTeamSpawns.size() + ")");
-        p.sendMessage("Red Spawn  : " + (!redTeamSpawns.isEmpty() ? ChatColor.GREEN + "OK" : ChatColor.RED + "KO") + " (" + redTeamSpawns.size() + ")");
-        p.sendMessage("Blue Goal  : " + (!blueTeamGoalBlocks.isEmpty() ? ChatColor.GREEN + "OK" : ChatColor.RED + "KO") + " (" + blueTeamGoalBlocks.size() + ")");
-        p.sendMessage("Red Goal   : " + (!redTeamGoalBlocks.isEmpty() ? ChatColor.GREEN + "OK" : ChatColor.RED + "KO") + " (" + redTeamGoalBlocks.size() + ")");
+        p.sendMessage(I18n.format("ball_spawn", "status", ballSpawn != null ? "§aOK" : "§cKO"));
+        p.sendMessage(I18n.format("blue_spawn", "status", !blueTeamSpawns.isEmpty() ? "§aOK" : "§cKO", "count", blueTeamSpawns.size()));
+        p.sendMessage(I18n.format("red_spawn", "status", !redTeamSpawns.isEmpty() ? "§aOK" : "§cKO", "count", redTeamSpawns.size()));
+        p.sendMessage(I18n.format("blue_goal", "status", !blueTeamGoalBlocks.isEmpty() ? "§aOK" : "§cKO", "count", blueTeamGoalBlocks.size()));
+        p.sendMessage(I18n.format("red_goal", "status", !redTeamGoalBlocks.isEmpty() ? "§aOK" : "§cKO", "count", redTeamGoalBlocks.size()));
         p.sendMessage("------------------");
-        p.sendMessage("Next step : Use /cb team to generate team");
+        p.sendMessage(I18n.get("next_step"));
     }
 
     public void scanNearPlayers(ArrayList<Location> spawns, Team team) {
@@ -129,25 +129,29 @@ public class Match {
     public void start(Player p) {
         if (matchState.equals(READY)) {
             if (!blueTeam.isEmpty() || !redTeam.isEmpty()) {
-                Comparator<Location> sort = Comparator.comparingDouble(l -> l.distance(ballSpawn));
-                blueTeamSpawns.sort(sort);
-                redTeamSpawns.sort(sort);
+                sortSpawns();
 
                 startDelayedRound();
                 matchTimer = matchDuration;
                 matchState = IN_PROGRESS;
 
-                p.sendMessage("[CubeBall] " + ChatColor.GREEN + "Match starting !");
+                p.sendMessage(I18n.get("match_starting"));
                 getAllPlayer(true).forEach(player -> {
-                    player.sendMessage("[CubeBall] " + ChatColor.GREEN + "Match started ! Duration : " + ChatColor.GOLD + (matchTimer / 60) + ":" + (matchTimer - ((matchTimer / 60) * 60)));
-                    player.sendMessage("[CubeBall] " + ChatColor.GREEN + "Max goals : " + (maxGoal == 0 ? "UNLIMITED" : maxGoal));
+                    player.sendMessage(I18n.format("match_started", "min", matchTimer / 60, "sec", matchTimer - ((matchTimer / 60) * 60)));
+                    player.sendMessage(I18n.format("max_goals", "max", maxGoal == 0 ? I18n.get("max_goals_unlimited") : maxGoal));
                 });
             } else {
-                p.sendMessage("[CubeBall] " + ChatColor.RED + "You need to add players to team (/cb team blue|red) <Player>");
+                p.sendMessage(I18n.get("need_add_players"));
             }
         } else {
-            p.sendMessage("[CubeBall] " + ChatColor.RED + "Match is not ready or already started");
+            p.sendMessage(I18n.get("match_not_ready"));
         }
+    }
+
+    private void sortSpawns() {
+        Comparator<Location> sort = Comparator.comparingDouble(l -> l.distance(ballSpawn));
+        blueTeamSpawns.sort(sort);
+        redTeamSpawns.sort(sort);
     }
 
 
@@ -249,7 +253,7 @@ public class Match {
                 blueTeam.remove(p);
                 redTeam.remove(p);
             }
-            p.sendMessage("[Cubeball] " + ChatColor.GREEN + "Your are in the " + team + " team !");
+            p.sendMessage(I18n.format("your_team", "team", I18n.get(team == Team.BLUE ? "blue_name" : "red_name")));
             return true;
         }
         return false;
@@ -319,13 +323,13 @@ public class Match {
     public void endMatch() {
         String title;
         if (getBlueScore() > getRedScore()) {
-            title = ChatColor.BLUE + "BLUE" + ChatColor.GOLD + " TEAM WIN !";
+            title = I18n.get("blue_win");
             spawnFirework(Team.BLUE);
         } else if (getBlueScore() < getRedScore()) {
-            title = ChatColor.RED + "RED" + ChatColor.GOLD + " TEAM WIN !";
+            title = I18n.get("red_win");
             spawnFirework(Team.RED);
         } else {
-            title = ChatColor.GOLD + "OVERTIME !";
+            title = I18n.get("overtime");
             setMatchState(OVERTIME);
         }
 
@@ -336,12 +340,17 @@ public class Match {
         list.sort((e1, e2) -> Integer.compare(e2.getValue(), e1.getValue()));
         getAllPlayer(true).forEach(player -> {
             if (player != null) {
-                player.sendMessage("[CubeBall] " + ChatColor.GREEN + "GAME OVER!");
-                player.sendMessage("[CubeBall] 进球排行:");
-                player.sendMessage("一共进了 " + ChatColor.GREEN + (redScore + blueScore) + ChatColor.WHITE + " 个球");
+                player.sendMessage(I18n.get("game_over"));
+                player.sendMessage(I18n.get("goal_rank"));
+                player.sendMessage(I18n.format("total_goals", "total", redScore + blueScore));
                 int i = 0;
                 for (Map.Entry<Player, Integer> entry : list) {
-                    player.sendMessage(++i + " - " + (blueTeam.contains(entry.getKey()) ? ChatColor.BLUE : ChatColor.RED) + entry.getKey().getDisplayName() + ChatColor.WHITE + ": " + entry.getValue());
+                    player.sendMessage(I18n.format("player_goal",
+                            "rank", ++i,
+                            "color", (blueTeam.contains(entry.getKey()) ? ChatColor.BLUE : ChatColor.RED),
+                            "name", entry.getKey().getDisplayName(),
+                            "goals", entry.getValue()
+                    ));
                 }
             }
         });
@@ -358,9 +367,8 @@ public class Match {
     }
 
     public void sendScoreToPlayer() {
-        String title = ChatColor.BLUE.toString() + blueScore + ChatColor.WHITE + " - " + ChatColor.RED + redScore;
-        String subtitle = ChatColor.BOLD.toString() + ChatColor.GOLD + lastTouchPlayer.getDisplayName().toUpperCase() + ChatColor.RESET + " GOALS ! "
-                + "(" + computeSpeedGoal() + " km/h)";
+        String title = I18n.format("score_title", "blue", blueScore, "red", redScore);
+        String subtitle = I18n.format("score_subtitle", "name", lastTouchPlayer.getDisplayName().toUpperCase(), "speed", computeSpeedGoal());
         goals.put(lastTouchPlayer, goals.getOrDefault(lastTouchPlayer, 0) + 1);
         sendMessageToAllPlayer(title, subtitle, 3, Sound.WEATHER_RAIN, 0.5f);
     }
@@ -406,21 +414,21 @@ public class Match {
     }
 
     public void displayTeams(Player p) {
-        p.sendMessage("BLUE TEAM : " + this.blueTeam.size() + " player(s)");
+        p.sendMessage(I18n.format("blue_team", "count", this.blueTeam.size()));
         this.blueTeam.forEach(player -> {
             if (player != null) {
                 p.sendMessage("- " + ChatColor.BLUE + player.getDisplayName());
             }
         });
 
-        p.sendMessage("RED TEAM : " + this.redTeam.size() + " player(s)");
+        p.sendMessage(I18n.format("red_team", "count", this.redTeam.size()));
         this.redTeam.forEach(player -> {
             if (player != null) {
                 p.sendMessage("- " + ChatColor.RED + player.getDisplayName());
             }
         });
 
-        p.sendMessage("SPECTATOR TEAM : " + this.spectatorTeam.size() + " player(s)");
+        p.sendMessage(I18n.format("spectator_team", "count", this.spectatorTeam.size()));
         this.spectatorTeam.forEach(player -> {
             if (player != null) {
                 p.sendMessage("- " + ChatColor.GREEN + player.getDisplayName());

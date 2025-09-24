@@ -11,3 +11,5 @@ matchDuration: 300
 
 # Max goal per match ( 0 = unlimited )
 maxGoal: 0
+
+language: en
