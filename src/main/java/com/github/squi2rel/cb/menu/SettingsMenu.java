@@ -27,6 +27,7 @@ public class SettingsMenu {
         MatchState state = match.getMatchState();
         builder.setSlot(0, 5, getState(state), match.getName(), null);
         builder.setSlot(8, 5, BARRIER, I18n.get("menu_desc_delete"), null).setAction((p, v) -> {
+            match.removeBall();
             CubeBall.matches.remove(match.getName());
             CubeBall.save();
             v.openParent(p);
@@ -82,11 +83,15 @@ public class SettingsMenu {
             builder.refresh();
         });
         builder.setSlot(7, 1, c.cubeBallBlock, I18n.get("menu_desc_ballblock"), null).setAction((p, v) -> {
+            if (!p.hasPermission("cubecubeball.admin")) {
+                p.sendMessage(ChatColor.RED + "You do not have permission to do this!");
+                return;
+            }
             p.sendMessage(I18n.get("menu_desc_material_name"));
             p.closeInventory();
             MenuManager.registerChatHandler(p, s -> {
                 Material m = Material.matchMaterial(s.toUpperCase());
-                if (m == null || !m.isBlock() || m.isAir()) {
+                if (m == null || !m.isBlock() || m.isAir() || !m.isItem()) {
                     p.sendMessage(I18n.get("menu_desc_invalid_material"));
                     v.sendTo(p, v.getArgument());
                 }

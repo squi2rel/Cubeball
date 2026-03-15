@@ -13,7 +13,7 @@ public class MatchData {
     public String creator;
     public long creatorIdMost, creatorIdLeast;
 
-    public Material cubeBallBlock = Material.NETHERITE_BLOCK;
+    public Material cubeBallBlock = Material.IRON_BLOCK;
     public int matchDuration = 300;
     public int maxGoal = 0;
     public int dashCooldown = 15;
